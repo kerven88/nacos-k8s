@@ -6,7 +6,7 @@ metadata:
   name: nacos-operator
   namespace: default
   labels:
-    helm.sh/chart: nacos-operator-0.1.0
+    helm.sh/chart: nacos-operator-0.1.1
     app.kubernetes.io/name: nacos-operator
     app.kubernetes.io/instance: nacos-operator
     app.kubernetes.io/version: "1.16.0"
@@ -640,6 +640,18 @@ spec:
                       type: array
                   type: object
               type: object
+            certification:
+              description: 开启认证
+              properties:
+                cache_enabled:
+                  type: boolean
+                enabled:
+                  type: boolean
+                token:
+                  type: string
+                token_expire_seconds:
+                  type: string
+              type: object
             config:
               description: 配置文件
               type: string
@@ -1265,21 +1277,65 @@ rules:
       - update
   - apiGroups:
       - ""
-      - apps
-      - batch
     resources:
       - configmaps
-      - statefulsets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
       - pods
-      - services
-      - events
-      - jobs
     verbs:
       - get
-      - create
-      - update
-      - patch
       - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - statefulsets
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - create
+      - get
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - create
+      - get
+      - list
+      - patch
+      - update
       - watch
 ---
 # Source: nacos-operator/templates/serviceaccount.yaml
@@ -1303,7 +1359,7 @@ metadata:
   name: nacos-operator
   namespace: default
   labels:
-    helm.sh/chart: nacos-operator-0.1.0
+    helm.sh/chart: nacos-operator-0.1.1
     app.kubernetes.io/name: nacos-operator
     app.kubernetes.io/instance: nacos-operator
     app.kubernetes.io/version: "1.16.0"
@@ -1326,7 +1382,7 @@ metadata:
   name: nacos-operator
   namespace: default
   labels:
-    helm.sh/chart: nacos-operator-0.1.0
+    helm.sh/chart: nacos-operator-0.1.1
     app.kubernetes.io/name: nacos-operator
     app.kubernetes.io/instance: nacos-operator
     app.kubernetes.io/version: "1.16.0"

@@ -1,8 +1,9 @@
+{{- $auth := default (dict) .Values.nacos.auth -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: {{ include "nacos.fullname" . }}
-  namespace: {{ .Values.namespace }}
+  namespace: {{ .Release.Namespace }}
   annotations:
   {{- toYaml .Values.annotations | indent 4 }}
 spec:
@@ -26,6 +27,8 @@ spec:
       labels:
         app.kubernetes.io/name: {{ include "nacos.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        checksum/auth-config: {{ include "nacos.auth.configChecksum" . | quote }}
     spec:
       {{- with .Values.nodeSelector }}
       nodeSelector:
@@ -39,11 +42,15 @@ spec:
       tolerations:
       {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if and (eq .Values.global.mode "cluster") (.Values.nacos.plugin.enable) }}
       initContainers:
         - name: peer-finder-plugin-install
           image: {{.Values.nacos.plugin.image.repository}}:{{.Values.nacos.plugin.image.tag}}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.nacos.plugin.image.pullPolicy }}
           volumeMounts:
             - mountPath: /home/nacos/plugins/peer-finder
               name: data
@@ -54,40 +61,88 @@ spec:
           image: "{{ .Values.nacos.image.repository }}:{{ .Values.nacos.image.tag }}"
           imagePullPolicy: {{ .Values.nacos.image.pullPolicy }}
           startupProbe:
-            initialDelaySeconds: 180
+            initialDelaySeconds: {{ .Values.nacos.probe.startupDelaySeconds | default 180 }}
             periodSeconds: 5
             timeoutSeconds: 10
             httpGet:
               scheme: HTTP
+              {{- if eq (include "nacos.isV3" .) "true" }}
+              port: {{ .Values.nacos.consolePort }}
+              path: /v3/console/health/readiness
+              {{- else }}
               port: {{ .Values.nacos.serverPort }}
-              path: /nacos/v1/console/health/readiness
+              path: /nacos/
+              {{- end }}
           livenessProbe:
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 10
             httpGet:
               scheme: HTTP
+              {{- if eq (include "nacos.isV3" .) "true" }}
+              port: {{ .Values.nacos.consolePort }}
+              path: /v3/console/health/liveness
+              {{- else }}
               port: {{ .Values.nacos.serverPort }}
-              path: /nacos/v1/console/health/liveness
+              path: /nacos/
+              {{- end }}
+          readinessProbe:
+            periodSeconds: 5
+            timeoutSeconds: 10
+            httpGet:
+              scheme: HTTP
+              {{- if eq (include "nacos.isV3" .) "true" }}
+              port: {{ .Values.nacos.consolePort }}
+              path: /v3/console/health/readiness
+              {{- else }}
+              port: {{ .Values.nacos.serverPort }}
+              path: /nacos/
+              {{- end }}
           ports:
-            - name: http
+            - name: client-http
               containerPort: {{ .Values.nacos.serverPort }}
               protocol: TCP
-            - containerPort: {{ add .Values.nacos.serverPort 1000}}
+            - containerPort: {{ add .Values.nacos.serverPort 1000 }}
               name: client-rpc
             - containerPort: {{ add .Values.nacos.serverPort 1001 }}
               name: raft-rpc
             - containerPort: 7848
               name: old-raft-rpc
+            {{- if eq (include "nacos.isV3" .) "true" }}
+            - containerPort: {{ .Values.nacos.consolePort }}
+              name: console
+              protocol: TCP
+            - containerPort: {{ .Values.nacos.mcpPort }}
+              name: mcp
+            {{- end }}
           resources:
-          {{- toYaml .Values.resources | nindent 12 }}
+          {{ toYaml .Values.resources | nindent 12 }}
           env:
             - name: NACOS_SERVER_PORT
               value: {{ .Values.nacos.serverPort | quote }}
             - name: NACOS_APPLICATION_PORT
               value: {{ .Values.nacos.serverPort | quote }}
             - name: PREFER_HOST_MODE
-              value: {{ .Values.nacos.preferhostmode | quote }}
+              value: {{ .Values.nacos.preferHostMode | quote }}
+            {{- if kindIs "bool" (get $auth "enabled") }}
+            - name: NACOS_AUTH_ENABLE
+              value: {{ get $auth "enabled" | quote }}
+            {{- end }}
+            - name: NACOS_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nacos.auth.secretName" . }}
+                  key: {{ default "token" (get $auth "tokenSecretKey") | quote }}
+            - name: NACOS_AUTH_IDENTITY_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nacos.auth.secretName" . }}
+                  key: {{ default "identity-key" (get $auth "identityKeySecretKey") | quote }}
+            - name: NACOS_AUTH_IDENTITY_VALUE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nacos.auth.secretName" . }}
+                  key: {{ default "identity-value" (get $auth "identityValueSecretKey") | quote }}
             {{- if eq .Values.global.mode "standalone" }}
             - name: MODE
               value: "standalone"
@@ -162,4 +217,3 @@ spec:
       spec:
   {{- toYaml .Values.persistence.data | nindent 8 }}
   {{- end }}
-

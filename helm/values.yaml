@@ -2,27 +2,52 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+imagePullSecrets: []
+# - name: my-registry-secret
+
 global:
   mode: standalone
+#  deploymentType: merge
 #  mode: cluster
 
 ############################nacos###########################
-namespace: default
+#namespace: default
 nacos:
   image:
     repository: nacos/nacos-server
-    tag: latest
+    tag: v3.2.3
     pullPolicy: IfNotPresent
+  # majorVersion: ""  # Override version detection when using custom tags like "latest".
+                       # Set to "2" for Nacos 2.x or "3" for Nacos 3.x.
   plugin:
     enable: true
     image:
       repository: nacos/nacos-peer-finder-plugin
       tag: 1.1
+      pullPolicy: IfNotPresent
   replicaCount: 1
   podManagementPolicy: Parallel
   domainName: cluster.local
-  preferhostmode: hostname
+  preferHostMode: hostname
   serverPort: 8848
+  consolePort: 8080
+  mcpPort: 9080
+  auth:
+    # null inherits the image default. true and false are rendered explicitly.
+    enabled: null
+    # Use an existing Secret in production. When empty, the chart creates one
+    # and reuses its generated values during Helm upgrades.
+    existingSecret: ""
+    tokenSecretKey: token
+    identityKeySecretKey: identity-key
+    identityValueSecretKey: identity-value
+  # Deprecated inline credential values. Prefer nacos.auth.existingSecret.
+  # authToken must be a Base64-encoded value whose decoded form is at least 32 bytes.
+  authToken: ""
+  identityKey: ""
+  identityValue: ""
+  probe:
+    startupDelaySeconds: 180
   health:
     enabled: false
   storage:
@@ -35,6 +60,8 @@ nacos:
 #      username: usernmae
 #      password: password
 #      param: characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false
+#      # For MySQL 8.0+, you may need to add: &allowPublicKeyRetrieval=true
+#      # Full example: characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true
 
 persistence:
   enabled: false
@@ -56,11 +83,15 @@ service:
 
 ingress:
   enabled: false
-  #apiVersion: networking.k8s.io/v1
-  apiVersion: extensions/v1beta1
+  # apiVersion: extensions/v1beta1
+  apiVersion: networking.k8s.io/v1
   annotations: { }
     # kubernetes.io/ingress.class: nginx
-  # kubernetes.io/tls-acme: "true"
+    # kubernetes.io/tls-acme: "true"
+    # For Kubernetes >= 1.18 you should specify the ingress-controller via the field ingressClassName
+    # See https://kubernetes.io/blog/2020/04/02/improvements-to-the-ingress-api-in-kubernetes-1.18/#specifying-the-class-of-an-ingress
+    # ingressClassName: nginx
+  ingressClassName: "nginx"
   hosts:
     - host: nacos.example.com
       #paths: [ ]
@@ -88,6 +119,5 @@ nodeSelector: { }
 tolerations: [ ]
 
 affinity: { }
-
 
 
